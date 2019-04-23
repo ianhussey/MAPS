@@ -1,0 +1,18 @@
+R version 3.5.2 (2018-12-20)
+Platform: x86_64-apple-darwin15.6.0 (64-bit)
+Running under: macOS Mojave 10.14.3
+
+Matrix products: default
+BLAS: /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+LAPACK: /Library/Frameworks/R.framework/Versions/3.5/Resources/lib/libRlapack.dylib
+
+locale:
+[1] en_IE.UTF-8/en_IE.UTF-8/en_IE.UTF-8/C/en_IE.UTF-8/en_IE.UTF-8
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+loaded via a namespace (and not attached):
+ [1] Rcpp_1.0.1       crayon_1.3.4     dplyr_0.8.0.1    assertthat_0.2.1 R6_2.4.0         magrittr_1.5     pillar_1.3.1     rlang_0.3.1      rstudioapi_0.10 
+[10] tools_3.5.2      glue_1.3.1       purrr_0.3.2      xfun_0.6         yaml_2.2.0       compiler_3.5.2   pkgconfig_2.0.2  knitr_1.22       tidyselect_0.2.5
+[19] tibble_2.1.1    
