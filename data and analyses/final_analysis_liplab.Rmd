@@ -1,0 +1,828 @@
+---
+title: "MAPS"
+author: "Ian Hussey"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+# To do
+
+- delete "style and reporting requirements notes" and "old code to be adapted" below before submission
+- How to I report the multiple ORs produced by the models in the required reporting format?
+- Is a p value for trend required?
+- " “ci_1”= the 95% confidence interval corresponding to “or_1”) " - what format should CIs be in? eg text, matrix, vector?
+- was the original publication's model 1 really one model or two, i.e., depression ~ computer_use_1 + computer_use_2 vs. depression ~ computer_use_1; depression ~ computer_use_2
+- DIC not available in brms, only waic and loo. how to solve?
+- nb that ordinal regression assumes a causal relationship among the variables, which should be avoided in interpretation.
+- treating computer use as continuous vs ordinal is a question to be answered. the latter has greater fidelity to the data, but the former more easily provides the singular answer the question looks for. Then again, the original pub ends up looking for linear trend in the end after calculating all those odds ratios (and in doing so assessing for and assuming that the categories are equally spaced). if the linear trend between computer use categories is the question, why not treat it as continuous in the first instance. 
+  - how does this interact with imputation? perhaps imputating non integer is problematic?
+
+# Justification of analytic strategy
+
+Answer the research question posed, not other questions. There is a distinction between flexibility in the analytic approach used to answer a given question, and flexibility in the (re)interpretation of what the question is (or worse, “really” is or should be). 
+The current research question defined by the MAPS team is [check] “does computer use on the weekdays and the weekends at 16 is associated with depression at 18”. 
+Before we lay out our analytic strategy, we first discuss our interpretation of what the research is and is not. 
+First, the question asks whether CU is associated with D. Although the association is prospective (ie there is a time lag between the iv and dv), the RQ does not ask about causality and we therefore do not attempt to answer questions of (pseudo) causality. This is important to acknowledge because the average lay reader may be likely to interpret the prospective prediction of D by CU as implying causality, even if implicitly. Given that this question is a hot topic at the moment, this consideration is important. For example, we would expect it to be more common that people
+
+# Style and reporting requirements
+
+- new variable names must be prepended with "n_"
+- new parameters named IN_SHOUTING_SNAKE_CASE and at the start of functions with comment explaning them, including a min and max value.
+
+```{r include=FALSE}
+
+# formatting options
+
+# set default chunk options
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE, 
+                      echo = TRUE)
+
+# disable scientific notation
+options(scipen = 999) 
+
+# knitr output for html
+options(knitr.table.format = "html")
+
+```
+
+# Version info
+
+```{r}
+
+TEAM_NAME <- "liplab"
+
+VERSION <- version$version.string
+
+# # Save session info on development machine (only). Commented out as it shouldn't be run in the centralized analyses, only on the local development machine.
+# writeLines(capture.output(sessionInfo()), "session_info_liplab.txt")
+
+```
+
+# Workflow
+
+## Dependencies
+
+NB these should be loaded in each function according to the style guide, therefore this chunk should eventually be removed.
+
+```{r}
+
+# dependencies
+library(tidyverse)
+library(brms)
+library(brmstools)
+library(sjPlot)
+library(sjstats)
+library(parallel)
+library(knitr)
+library(kableExtra)
+library(timesavers)
+library(patchwork)
+
+```
+
+## Load data
+
+```{r}
+
+load_data <- function(path){
+  
+  # imports 
+  library(tidyverse)
+  
+  data <- read.csv(path) %>%
+    dplyr::select(comp_week,
+                  comp_wend,
+                  dep_band_15,
+                  dep_score,
+                  dep_thoughts,
+                  has_dep_diag)
+  
+  return(data)
+}
+
+data <- load_data(path = "maps-synthetic-data.csv")
+
+```
+
+
+### dev chunk
+
+```{r}
+
+data %>%
+  mutate_all(.funs = is.na) %>%
+  summarize_all(.funs = mean)
+
+data %>%
+  count(comp_week) %>%
+  arrange(desc(n))
+
+data %>%
+  count(comp_wend) %>%
+  arrange(desc(n))
+
+data %>%
+  count(dep_band_15) %>%
+  arrange(desc(n))
+
+data %>%
+  count(dep_score) %>%
+  arrange(desc(n))
+
+data %>%
+  count(dep_thoughts) %>%
+  arrange(desc(n))
+
+data %>%
+  count(has_dep_diag) %>%
+  arrange(desc(n))
+
+```
+
+## Outliers
+
+```{r}
+
+outliers_001 <- function(data){
+  
+  # # imports 
+  # library(tidyverse)
+  # 
+  # data <- read.csv(path) %>%
+  #   dplyr::select(comp_week,
+  #                 comp_wend,
+  #                 dep_band_15,
+  #                 dep_score,
+  #                 dep_thoughts,
+  #                 has_dep_diag)
+  
+  return(data)
+}
+
+data <- outliers_001(data)
+
+```
+
+## Missing
+
+see https://cran.r-project.org/web/packages/brms/vignettes/brms_missings.html
+
+```{r}
+
+missing_001 <- function(data){
+  
+  # # imports 
+  # library(tidyverse)
+  # 
+  # data <- read.csv(path) %>%
+  #   dplyr::select(comp_week,
+  #                 comp_wend,
+  #                 dep_band_15,
+  #                 dep_score,
+  #                 dep_thoughts,
+  #                 has_dep_diag)
+  
+  return(data)
+}
+
+data <- missing_001(data)
+
+```
+
+## Define depression
+
+```{r}
+
+depression_001 <- function(data){
+  
+  # imports
+  library(tidyverse)
+  
+  data <- data %>%
+    dplyr::mutate(depression = as.ordered(dep_score))
+  
+  return(data)
+}
+
+data <- depression_001(data)
+
+#levels(data$depression)
+
+```
+
+## Define computer use
+
+original data has 4 categories: 
+Not at all
+Less than 1 hour
+1-2 hours
+3 or more hours
+
+original article recodes this to three, but is not explicit about this:
+Less than 1 hour
+1-2 hours
+3 or more hours
+
+I don't think we should follow suit
+
+```{r}
+
+computer_use_001 <- function(data){
+  
+  # imports
+  library(tidyverse)
+  library(forcats)
+  
+  # # recode data as three categories
+  # data <- data %>%
+  #   dplyr::mutate(comp_use_1 = ifelse(as.character(comp_week) == "Not at all",
+  #                                     "Less than 1 hour",
+  #                                     as.character(comp_week)),
+  #                 comp_use_1 = forcats::fct_relevel(comp_use_1,
+  #                                                   "Less than 1 hour",
+  #                                                   "1-2 hours",
+  #                                                   "3 or more hours"),
+  #                 comp_use_1 = as.ordered(comp_use_1),
+  #                 comp_use_2 = ifelse(as.character(comp_wend) == "Not at all",
+  #                                     "Less than 1 hour",
+  #                                     as.character(comp_wend)),
+  #                 comp_use_2 = forcats::fct_relevel(comp_use_2,
+  #                                                   "Less than 1 hour",
+  #                                                   "1-2 hours",
+  #                                                   "3 or more hours"),
+  #                 comp_use_2 = as.ordered(comp_use_2))
+  
+  # # leave data as four categories
+  # data <- data %>%
+  #   dplyr::mutate(comp_use_1 = forcats::fct_relevel(comp_week,
+  #                                                   "Not at all",
+  #                                                   "Less than 1 hour",
+  #                                                   "1-2 hours",
+  #                                                   "3 or more hours"),
+  #                 comp_use_1 = as.ordered(comp_use_1),
+  #                 comp_use_2 = forcats::fct_relevel(comp_wend,
+  #                                                   "Not at all",
+  #                                                   "Less than 1 hour",
+  #                                                   "1-2 hours",
+  #                                                   "3 or more hours"),
+  #                 comp_use_2 = as.ordered(comp_use_2))
+  
+  # make continuous
+  data <- data %>%
+    dplyr::mutate(comp_use_1 = dplyr::recode(comp_week,
+                                             "Not at all" = 1,
+                                             "Less than 1 hour" = 2,
+                                             "1-2 hours" = 3,
+                                             "3 or more hours" = 4),
+                  comp_use_1 = as.numeric(as.character(comp_use_1)),
+                  comp_use_2 = dplyr::recode(comp_wend,
+                                             "Not at all" = 1,
+                                             "Less than 1 hour" = 2,
+                                             "1-2 hours" = 3,
+                                             "3 or more hours" = 4),
+                  comp_use_2 = as.numeric(as.character(comp_use_2)))
+  
+  return(data)
+}
+
+data <- computer_use_001(data)
+
+```
+
+### checks
+
+Not to be included in the final analysis script as it's against the reporting guidelines - for local use.
+
+```{r}
+
+levels(data$comp_use_1)
+levels(data$comp_use_2)
+
+```
+
+## Additional
+
+```{r}
+
+additional_001 <- function(data){
+  
+  # # imports 
+  # library(tidyverse)
+  # 
+  
+  return(data)
+}
+
+data <- additional_001(data)
+
+```
+
+## Specify model
+
+results: a named list containing the following:
+● “mod” = model object
+● “or_1” = your first odds ratio
+● “p_1” = the p-value corresponding to “or_1”
+● “ci_1”= the 95% confidence interval corresponding to “or_1”)
+● “or_2” = your second odds ratio
+● “p_2” = the p-value corresponding to “or_2”
+● “ci_2”= the 95% confidence interval corresponding to “or_2”
+● “AIC” = the AIC value
+● “DIC” = the DIC value
+
+```{r}
+
+# specify_model <- function(data){
+#   
+#   # # imports 
+#   # library(tidyverse)
+#   
+#   return(results)
+# }
+# 
+# results <- specify_model(data)
+
+```
+
+### d ~ comp_use_1 + comp_use_2
+
+needed?
+
+#### Bayesian
+
+Saved object run using computer use coded using 4 native categories
+
+```{r}
+
+# nb im using the d ~ comp_use_2 model to refine the strategy
+
+# mod0 <- brm(formula = depression ~ comp_use_1 + comp_use_2,
+#             data = data, 
+#             family = cumulative("logit"),
+#             #prior = c(set_prior("normal(0, 1)", class = "b")),
+#             iter = 2000,
+#             chains = 4,
+#             control = list(adapt_delta = 0.95),
+#             cores = detectCores(),
+#             file = "models/mod0")
+# 
+# summary(mod0)
+# 
+# hypothesis(mod0, "comp_use_1.L > 0", alpha = .025)
+# hypothesis(mod0, "comp_use_1.Q > 0", alpha = .025)
+# hypothesis(mod0, "comp_use_1.C > 0", alpha = .025)
+# 
+# hypothesis(mod0, "comp_use_2.L > 0", alpha = .025)
+# hypothesis(mod0, "comp_use_2.Q > 0", alpha = .025)
+# hypothesis(mod0, "comp_use_2.C > 0", alpha = .025)
+# 
+# posterior_interval(mod0)
+# 
+# plot_model(mod0,
+#            prob.inner = 0.5, 
+#            prob.outer = 0.95)
+# 
+# plot_model(mod0,
+#            type = "pred",
+#            terms = c("comp_use_1"))
+# 
+# plot_model(mod0,
+#            type = "pred",
+#            terms = c("comp_use_2"))
+
+```
+
+### d ~ comp_use_1 
+
+#### Bayesian
+
+##### Depression as ordinal
+
+as in original pub
+
+Saved object run using computer use coded using 4 native categories
+
+```{r}
+
+mod1 <- brm(formula = depression ~ comp_use_1,
+            data = data,
+            family = cumulative("logit"),
+            #prior = c(set_prior("normal(0, 1)", class = "b")),
+            iter = 2000,
+            chains = 4,
+            control = list(adapt_delta = 0.95),
+            cores = detectCores(),
+            file = "models/mod1")
+
+summary(mod1)
+
+hypothesis(mod1, "comp_use_1.L > 0", alpha = .025)
+hypothesis(mod1, "comp_use_1.Q > 0", alpha = .025)
+hypothesis(mod1, "comp_use_1.C > 0", alpha = .025)
+posterior_interval(mod1)
+
+plot_model(mod1,
+           prob.inner = 0.5,
+           prob.outer = 0.95)
+
+marginal_effects(mod1, 
+                 "comp_use_1", 
+                 categorical = TRUE)
+
+```
+
+- do the intercepts refer to levels of the IV or DV?
+- why does the predicted values plot have 5 levels (0-4) which seem to be te depression values, but also a 0.1 y axis labelled depression? are these probability values?
+
+##### Depression as continuous
+
+```{r}
+
+mod1b <- brm(formula = depression ~ comp_use_1,
+            data = data, 
+            family = cumulative("logit"),
+            #prior = c(set_prior("normal(0, 1)", class = "b")),
+            iter = 2000,
+            chains = 4,
+            control = list(adapt_delta = 0.95),
+            cores = detectCores(),
+            file = "models/mod1b")
+
+# nb these are log odds 
+summary(mod1b)
+
+hypothesis(mod1b, "comp_use_1 > 0", alpha = .025)
+hypothesis(mod1b, "comp_use_1 < 0", alpha = .025)
+
+# convert to odds ratios
+posterior_summary(mod1b) %>%
+  exp() %>%
+  as.data.frame() %>%
+  dplyr::select(-Est.Error)
+
+plot_model(mod1b,
+           prob.inner = 0.5, 
+           prob.outer = 0.95)
+
+marginal_effects(mod1b, 
+                 "comp_use_1", 
+                 categorical = TRUE)
+
+```
+
+- does centering matter here? 
+- does the skew?
+
+### d ~ comp_use_2
+
+#### Frequentist 
+
+##### Using polr
+
+```{r}
+
+library(MASS)
+
+mod2_polr <- polr(depression ~ comp_use_2, 
+                  data = data)
+
+summary(mod2_polr)
+
+exp(cbind(OR = coef(mod2_polr), confint(mod2_polr))) %>%
+  as.data.frame() %>%
+  round_df(3)
+
+```
+
+##### Using clm
+
+###### depression as ordinal
+
+as in original pub
+
+```{r}
+
+library(ordinal)
+
+mod2_clm <- clm(depression ~ comp_use_2, 
+                data = data)
+
+summary(mod2_clm)
+
+exp(confint(mod2_clm)) %>%
+  as.data.frame() %>%
+  round_df(3)
+
+# plot(profile(mod2_clm))
+
+```
+
+###### depression as continuous
+
+as in original pub
+
+```{r}
+
+library(ordinal)
+
+mod2b_clm <- clm(depression ~ comp_use_2, 
+                 data = data)
+
+summary(mod2b_clm)
+
+exp(confint(mod2b_clm)) %>%
+  as.data.frame() %>%
+  round_df(3)
+
+# plot(profile(mod2_clm))
+
+```
+
+#### Bayesian
+
+##### Depression as ordinal
+
+as in original pub
+
+Saved object run using computer use coded using 4 native categories
+
+```{r}
+
+mod2 <- brm(formula = depression ~ comp_use_2,
+            data = data, 
+            family = cumulative("logit"),
+            #prior = c(set_prior("normal(0, 1)", class = "b")),
+            iter = 2000,
+            chains = 4,
+            control = list(adapt_delta = 0.95),
+            cores = detectCores(),
+            file = "models/mod2")
+
+# nb these are log odds 
+summary(mod2)
+
+hypothesis(mod2, "comp_use_2.L > 0", alpha = .025)
+hypothesis(mod2, "comp_use_2.Q > 0", alpha = .025)
+hypothesis(mod2, "comp_use_2.C > 0", alpha = .025)
+
+# convert to odds ratios
+posterior_summary(mod2) %>%
+  exp() %>%
+  as.data.frame() %>%
+  dplyr::select(-Est.Error)
+
+plot_model(mod2,
+           prob.inner = 0.5, 
+           prob.outer = 0.95)
+
+plot(marginal_effects(mod2, 
+                 "comp_use_2", 
+                 categorical = TRUE))
+
+```
+
+##### Depression as continuous
+
+```{r}
+
+mod2b <- brm(formula = depression ~ comp_use_2,
+            data = data, 
+            family = cumulative("logit"),
+            #prior = c(set_prior("normal(0, 1)", class = "b")),
+            iter = 2000,
+            chains = 4,
+            control = list(adapt_delta = 0.95),
+            cores = detectCores(),
+            file = "models/mod2b")
+
+# nb these are log odds 
+summary(mod2b)
+
+hypothesis(mod2b, "comp_use_2 > 0", alpha = .025)
+
+# convert to odds ratios
+posterior_summary(mod2b) %>%
+  exp() %>%
+  as.data.frame() %>%
+  dplyr::select(-Est.Error)
+
+plot_model(mod2b,
+           prob.inner = 0.5, 
+           prob.outer = 0.95)
+
+marginal_effects(mod2b, 
+                 "comp_use_2", 
+                 categorical = TRUE)
+
+```
+
+
+# comparing approaches
+
+three approaches provide identical OR CIs for the d ~ comp_use_2 model:
+
+frequentist (polr):
+comp_use_2.L	0.71	1.41
+comp_use_2.Q	0.79	1.38	
+comp_use_2.C	0.83	1.22	
+
+frequentist (clm):
+comp_use_2.L	0.71	1.41		
+comp_use_2.Q	0.79	1.38		
+comp_use_2.C	0.83	1.22
+
+bayesian (brms, default prior):
+b_comp_use_2.L  0.71  1.43
+b_comp_use_2.Q  0.78  1.38
+b_comp_use_2.C  0.83  1.22
+
+
+
+
+
+# temp
+
+Should it be one model or two, for the two different computer variables? Given that they're correlated (are they?) why partial them out from one another?
+
+## Simple ordinal correlations
+
+A simple strategy that directly answers the question posed is to ordinally correlate the variables. I've converted to Odds Ratio's for the sake of the reporting guidelines.
+
+Converted to OR using https://www.psychometrica.de/effect_size.html#transform
+
+```{r}
+
+library(psych)
+
+data_temp_1 <- data %>%
+  mutate(comp_use_1 = recode(comp_use_1,
+                             "Not at all" = 0,
+                             "Less than 1 hour" = 1,
+                             "1-2 hours" = 2,
+                             "3 or more hours" = 3),
+         comp_use_2 = recode(comp_use_2,
+                             "Not at all" = 0,
+                             "Less than 1 hour" = 1,
+                             "1-2 hours" = 2,
+                             "3 or more hours" = 3),
+         depression = as.numeric(as.character(depression)))
+
+ggplot(data_temp_1, aes(comp_use_1, depression)) +
+  geom_jitter(alpha = 0.2) +
+  geom_smooth(method = "lm")
+
+data_temp_2 <- data_temp_1 %>%
+  dplyr::select(depression, comp_use_1) %>%
+  na.omit()
+
+cor.test(data_temp_2$comp_use_1, 
+         data_temp_2$depression,
+         use = "pairwise.complete.obs", 
+         method = "spearman")
+
+ci_comp_1 <- cor.ci(data_temp_2,
+                    method = "spearman", 
+                    plot = FALSE,
+                    n.iter = 2000)
+
+ci_comp_1$means
+ci_comp_1$ci$lower
+ci_comp_1$ci$upper
+ci_comp_1
+
+```
+
+OR = 0.884, 95% CI = [0.7755, 1.0077], p = .07
+
+
+```{r}
+
+ggplot(data_temp_1, aes(comp_use_2, depression)) +
+  geom_jitter(alpha = 0.2) +
+  geom_smooth(method = "lm")
+
+data_temp_3 <- data_temp_1 %>%
+  dplyr::select(depression, comp_use_2) %>%
+  na.omit()
+
+cor.test(data_temp_3$comp_use_2, 
+         data_temp_3$depression,
+         use = "pairwise.complete.obs", 
+         method = "spearman")
+
+ci_comp_2 <- cor.ci(data_temp_3,
+                    method = "spearman", 
+                    plot = FALSE,
+                    n.iter = 2000)
+
+ci_comp_2$means
+ci_comp_2$ci$lower
+ci_comp_2$ci$upper
+ci_comp_2
+
+```
+
+OR = 1.0265, 95% CI = [0.9022, 1.1678], p = .69
+
+### Posterior checks
+
+```{r}
+
+#pp_check(fit_bayes_ar, nsamples = 10) 
+
+plot(fit_bayes_ar, ask = FALSE)
+
+```
+
+### Results 
+
+```{r}
+
+# fixed effects
+ROPE_data <- rope(fit_bayes_ar, rope = c(-0.5, 0.5)) %>%    # NEEDS MUCH THOUGHT
+  dplyr::rename(Parameter = term,
+                `% inside ROPE` = rope) %>%
+  filter(grepl("b_", Parameter) & !grepl("prior", Parameter)) %>% 
+  mutate(Parameter = str_replace_all(Parameter, "b_", ""),
+         Parameter = str_replace_all(Parameter, "[.]", ":"))
+
+results_data <- summary(fit_bayes_ar)$fixed %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "Parameter") %>%
+  dplyr::rename(SE = Est.Error,
+                Lower = `l-95% CI`,
+                Upper = `u-95% CI`) %>%
+  full_join(ROPE_data, by = "Parameter") %>%
+  round_df(2)
+
+results_data %>%
+  dplyr::select(Parameter, Estimate, SE, Lower, Upper, 
+                `% inside ROPE`, Eff.Sample, Rhat) %>%
+  mutate(Estimate = round(Estimate, 2),
+         SE = round(SE, 2),
+         Lower = round(Lower, 2),
+         Upper = round(Upper, 2)) %>%
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+
+# correlation between residuals
+summary(fit_bayes_ar)$rescor_pars %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "parameter") %>%
+  round_df(2) %>%
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+# autoregressive effects
+summary(fit_bayes_ar)$cor_pars %>%
+  as.data.frame() %>%
+  rownames_to_column(var = "parameter") %>%
+  round_df(2) %>%
+  kable() %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+# bayes factors
+## Savage-Dickey Bayes Factor (BF10)
+BF_shame_sav_dic <- fit_bayes_ar %>% 
+  hypothesis(hypothesis = "ScoreShame_ConditionB = 0", alpha = .05)  
+
+BF_act_sav_dic <- fit_bayes_ar %>% 
+  hypothesis(hypothesis = "ScoreACT_ConditionB = 0", alpha = .05)  
+
+## Posterior evidence ratio (Bayesian p value)
+BF_shame_post_evid_ratio <- fit_bayes_ar %>% 
+  hypothesis(hypothesis = "ScoreShame_ConditionB < 0", alpha = .05)  
+
+BF_act_post_evid_ratio <- fit_bayes_ar %>% 
+  hypothesis(hypothesis = "ScoreACT_ConditionB < 0", alpha = .05)  
+
+```
+
+Bayes Factors:
+
+Shame:
+
+- Savage-Dickey Bayes Factor (BF10) = `r round(1/BF_shame_sav_dic$hypothesis$Evid.Ratio, 3)`.
+- 1-Posterior evidence ratio (Bayesian *p* value) = `r round(1/BF_shame_post_evid_ratio$hypothesis$Evid.Ratio, 5)`.
+
+ACT:
+
+- Savage-Dickey Bayes Factor (BF10) = `r round(1/BF_act_sav_dic$hypothesis$Evid.Ratio, 3)`.
+- 1-Posterior evidence ratio (Bayesian *p* value) = `r round(1/BF_act_post_evid_ratio$hypothesis$Evid.Ratio, 5)`.
+
+### Plot prior vs posterior
+
+```{r}
+
+plot(BF_shame_sav_dic)
+
+plot(BF_act_sav_dic)
+
+```
+
+
+

@@ -371,35 +371,6 @@ plot_model(mod1_multinominal,
 
 ```
 
-##### ordinal probit
-
-```{r}
-
-mod1_multinominal_probit <- brm(formula = depression ~ comp_use_1,
-                                data = data, 
-                                family = cumulative("probit"),
-                                iter = 2000,
-                                chains = 4,
-                                control = list(adapt_delta = 0.95),
-                                cores = detectCores(),
-                                file = "mod1_multinominal_probit")
-
-summary(mod1_multinominal_probit)
-
-hypothesis(mod1_multinominal_probit, "comp_use_1 > 0", alpha = .05)
-hypothesis(mod1_multinominal_probit, "comp_use_1 < 0", alpha = .05)
-posterior_interval(mod1_multinominal_probit)
-
-plot_model(mod1_multinominal_probit,
-           prob.inner = 0.5, 
-           prob.outer = 0.95)
-
-plot_model(mod1_multinominal_probit,
-           type = "pred",
-           terms = c("comp_use_1"))
-
-```
-
 ##### multinominal
 
 ```{r}

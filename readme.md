@@ -1,9 +1,12 @@
 # MAPS analysis
 
-NB Folder structure is a bit different to usual because of requirements of the MAPS submission - can't tidy it up unfortunatey. 
+<https://stats.idre.ucla.edu/r/dae/ordinal-logistic-regression/> / <http://r-statistics.co/Ordinal-Logistic-Regression-With-R.html>
+
+<https://www.rdocumentation.org/packages/ordinal/versions/2019.4-25>
+
+- two frequentist alternatives for ordinal logistic analysis
 
 ## To do
 
-1. How to get multinominal regression to produce a single Odds Ratio, as in the original paper? A few alternative approaches employed in the script at the moment, but none use OR.
-2. Rationale to be explicated further
+1. How to get ordinal logistic regression to produce a single Odds Ratio, as in the original paper? 
 
