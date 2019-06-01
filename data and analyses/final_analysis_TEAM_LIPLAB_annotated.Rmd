@@ -1,0 +1,419 @@
+---
+title: "MAPS"
+author: "Ian Hussey"
+output:
+  html_document:
+    code_folding: hide
+    highlight: haddock
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+The MAPS team provided strict guidelines on how code should be formatted. Our final submission is therefore a separate .R file that extracts only the necessary functions from the below code. This file serves to provide additional details to explicate our workflow.
+
+# Questions for MAPS team
+
+- AIC and DIC are not available when using brms for bayesian models. Currently I return WAIC as the AIC value. Would you like this changed?
+- You ask that I return a single AIC, DIC, and mod element in the results list. Becuase I have two models, I have returned each element as a list of two elements. e.g. `results = list(mod = list(model_1 = mod_1, model_2 = mod_2))`. Is this how you'd like it?
+
+# To do
+
+- check directionality of hypothesis() tests, eg using plots.
+- resolve CHECKs below
+- consider priors
+- check convergence statistics etc for the models (inc the priors)
+- nb that ordinal regression assumes a causal relationship among the variables, which should be avoided in interpretation.
+- ensure this and the R file are an exact match
+
+# Justification of analytic strategy
+
+Our straegy was to attempt to answer the research question that was posed and not other questions. We think that there is a distinction between flexibility in the analytic approach used to answer a given question and flexibility in the (re)interpretation of what the question is (or worse, “really” is or should be). 
+
+The research question was defined by the MAPS team as "Is computer use during weekdays and weekends at 16 years old associated with depression at 18 years old?".
+
+We interpreted each element of this research question as follows:
+
+1. "computer use during weekdays and weekends" was interpreted as "(computer use during weekdays) and (computer use during weekends)". There is much scope for alternative interpretations, such as by pooling the two variables, or pooling them and weighting them to attempt to quantify the total hours per week, etc. However, given that the response format was ordinal (ie max was "3+ hours"), the latter would introduce great uncertainty. As such, we work with the native data format. This meant answering the two questions (depression ~ computer use weekdays and depression ~ computer use weekends) separately. 
+  - This straggy therefore diverges from our understanding of what Khouja et al. (2019) did, who seem to have recoded the four ordinal levels to three (i.e. they merged the zero and the less than 1 hour options. 
+  - Equally, we were careful not to over interpret the question as asking about the relative prediction of these two types of computer usage: we computed two separate models (depression ~ computer use weekdays and depression ~ computer use weekends) rather than a single model containing both computer usage variables (e.g., depression ~ computer use weekdays + computer use weekends), as the latter would instead ask whether the unique contribution of one type of computer usage predicted depression after controlling for the other type. We note that this was the strategy employed by Khouja et al. (2019). 
+2. "16 years old" was interpreted as "the nearest timepoint to 16 years old", which was 15.5. *CHECK IN CODEBOOK*
+3. "associated with" was interpreted as meaning an association, not necessarially a causation. That is, we did not over interpret the research question to examine whether computer use caused depression (e.g., by predicting change in depression between the two timepoints due to computer use at the first timepoint). We think this point is particularly important to acknowledge. Given the prospective design, we think it is likely the reader may misinterpret any such association as implying causality, even if implicitly. Of course, finding any association could equally be explained by depression levels being relatively static between the two timepoints and a) depression causing computer usage, or b) a third variable causing both. Given that this topic is likely to be read (and potentially misinterpreted) by many concerned parents, this possibility must be highlighted, in our opinion. Indeed, the more meaningful question might well be whether there is likely to be a causal link between computer usage and symptoms of psychopathology, however, it is not the question asked by the MAPS team. As we noted above, in addition to flexibility in the analytic approach used to answer a given question, flexibility in the (re)interpretation of what the question is (or worse, “really” is or should be), likely represent an even greater number of experimenter degrees of freedom. As such, we attempt to answer the question as literally as possible.
+4. "depression" was interpreted as "XXXX" *CHECK AND EXPAND - WHY DIDN'T WE USE THE OTHER TWO DEPRESSION VARIABLES? ONE WAS DIAGNOSIS WHICH HAD HUGE MISSING DATA. THE OTHER WAS THOUGHTS, WHICH I GAVE LESS THOUGHT TO.*
+5. "at 18 years old" was interpreted as "the nearest timepoint to 18 years old", which was 17.5. *CHECK IN CODEBOOK*
+
+On the basis of our above interpretations of the question, we therefore elected to analyze the data using (Bayesian) Ordinal Regression models, on the basis that both depression and computer use were ordinal. This was done using the brms package (see Burkner & Vuorre, 2018, Ordinal Regression Models in Psychology: A Tutorial, doi: 10.1177/2515245918823199). 
+
+```{r include=FALSE}
+
+# formatting options
+
+# set default chunk options
+knitr::opts_chunk$set(message = FALSE, 
+                      warning = FALSE, 
+                      echo = TRUE)
+
+# disable scientific notation
+options(scipen = 999) 
+
+# knitr output for html
+options(knitr.table.format = "html")
+
+```
+
+# Version info
+
+```{r}
+
+TEAM_NAME <- "liplab"
+
+VERSION <- version$version.string
+
+```
+
+# Workflow
+
+## Dependencies
+
+```{r}
+
+# dependencies
+library(tidyverse)
+library(brms)
+library(parallel)
+library(brmstools)
+library(sjPlot)
+library(knitr)
+library(kableExtra)
+library(timesavers)   # library(devtools); install_github("ianhussey/timesavers")
+
+# Save session info 
+writeLines(capture.output(sessionInfo()), "session_info_liplab.txt")
+
+```
+
+## Load data
+
+```{r}
+
+load_data <- function(path){
+  
+  # imports 
+  library(tidyverse)
+  
+  data <- read.csv(path) %>%
+    dplyr::select(comp_week,
+                  comp_wend,
+                  dep_band_15,
+                  dep_score,
+                  dep_thoughts,
+                  has_dep_diag)
+  
+  return(data)
+}
+
+data <- load_data(path = "maps-synthetic-data-v1.1.csv")
+
+```
+
+### Distribution data
+
+```{r}
+
+data %>%
+  mutate_all(.funs = is.na) %>%
+  summarize_all(.funs = mean) %>%
+  timesavers::round_df(2) %>%
+  gather(variable, percent_missing) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+data %>%
+  count(comp_week) %>%
+  arrange(desc(n)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+data %>%
+  count(comp_wend) %>%
+  arrange(desc(n)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+data %>%
+  count(dep_band_15) %>%
+  arrange(desc(n)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+data %>%
+  count(dep_score) %>%
+  arrange(desc(n)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+data %>%
+  count(dep_thoughts) %>%
+  arrange(desc(n)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+data %>%
+  count(has_dep_diag) %>%
+  arrange(desc(n)) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+```
+
+## Define computer use
+
+The original data has 4 categories: Not at all, Less than 1 hour, 1-2 hours, 3 or more hours.
+
+The original article recodes this to three, but is not explicit about this as far as I can see: Less than 1 hour, 1-2 hours, 3 or more hours.
+
+I don't think we should follow suit
+
+```{r}
+
+computer_use_001 <- function(data){
+  
+  # imports
+  library(tidyverse)
+  library(forcats)
+  
+  # set the native ordered categories
+  data <- data %>%
+    dplyr::mutate(comp_use_1 = forcats::fct_relevel(comp_week,
+                                                    "Not at all",
+                                                    "Less than 1 hour",
+                                                    "1-2 hours",
+                                                    "3 or more hours"),
+                  comp_use_1 = as.ordered(comp_use_1),
+                  comp_use_2 = forcats::fct_relevel(comp_wend,
+                                                    "Not at all",
+                                                    "Less than 1 hour",
+                                                    "1-2 hours",
+                                                    "3 or more hours"),
+                  comp_use_2 = as.ordered(comp_use_2))
+
+  return(data)
+}
+
+data <- computer_use_001(data)
+
+```
+
+## Define depression
+
+```{r}
+
+depression_001 <- function(data){
+  
+  # imports
+  library(tidyverse)
+  
+  data <- data %>%
+    dplyr::mutate(depression = as.ordered(dep_score))
+  
+  return(data)
+}
+
+data <- depression_001(data)
+
+```
+
+### Check levels
+
+```{r}
+
+levels(data$depression)
+levels(data$comp_use_1)
+levels(data$comp_use_2)
+
+```
+
+## Outliers
+
+No assessment of multivariate outliers was done. Given ordinal scales, inspection of the distributions suggested there were no univariate outliers, therefore no data points were exluded as outliers.   
+
+## Missing
+
+Data missingness is high - so high that multiple imputation is not reccomended in our opinion.
+
+## Specify model
+
+```{r}
+
+specify_model <- function(data){
+  
+  # imports
+  library(tidyverse)
+  library(brms)  # nb requires brms 2.8+
+  library(parallel)
+  
+  # model 1: depression ~ comp_use_1
+  mod_1 <- brm(formula = depression ~ comp_use_1,
+               data = data,
+               family = cumulative("logit"),
+               #prior = c(set_prior("normal(0, 1)", class = "b")),
+               iter = 2000,
+               chains = 4,
+               control = list(adapt_delta = 0.95),
+               cores = detectCores(),
+               file = "TEAM_LIPLAB_mod_1")
+  
+  # add waic and loo
+  mod_1 <- add_criterion(mod_1, "waic")
+  
+  # extract waic
+  n_waic_1 <- mod_1$waic$estimates %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "coefficient") %>%
+    filter(coefficient == "waic") %>%
+    pull(Estimate) %>%
+    as.numeric()
+  
+  # bayesian p value, i.e., 1 - posterior probability
+  p_1 <- hypothesis(mod_1, "comp_use_1.L > 0", alpha = .025)$hypothesis %>%
+    mutate(bayesian_p = 1 - Post.Prob) %>%
+    pull(bayesian_p) %>%
+    as.numeric()
+  
+  # convert to odds ratios
+  n_odds_ratios_1 <- posterior_summary(mod_1) %>%
+    exp() %>%  # convert log odds to odds ratios
+    as.data.frame() %>%
+    rownames_to_column(var = "effect") %>%
+    filter(effect == "b_comp_use_1.L")  # extract effect for linear trend
+  
+  or_1 <- n_odds_ratios_1 %>%
+    pull(Estimate) %>%
+    as.numeric()
+  
+  n_ci_1_lower <- n_odds_ratios_1 %>%
+    pull(Q2.5) %>%
+    as.numeric()
+  
+  n_ci_1_upper <- n_odds_ratios_1 %>%
+    pull(Q97.5) %>%
+    as.numeric()
+  
+  ci_1 <- c(n_ci_1_lower, n_ci_1_upper)
+  
+  
+  # model 2: depression ~ comp_use_2
+  mod_2 <- brm(formula = depression ~ comp_use_2,
+               data = data,
+               family = cumulative("logit"),
+               #prior = c(set_prior("normal(0, 1)", class = "b")),
+               iter = 2000,
+               chains = 4,
+               control = list(adapt_delta = 0.95),
+               cores = detectCores(),
+               file = "TEAM_LIPLAB_mod_2")
+  
+  # add waic and loo
+  mod_2 <- add_criterion(mod_2, "waic")
+  
+  # extract waic
+  n_waic_2 <- mod_2$waic$estimates %>%
+    as.data.frame() %>%
+    rownames_to_column(var = "coefficient") %>%
+    filter(coefficient == "waic") %>%
+    pull(Estimate) %>%
+    as.numeric()
+  
+  # bayesian p value, i.e., 1 - posterior probability
+  p_2 <- hypothesis(mod_2, "comp_use_2.L > 0", alpha = .025)$hypothesis %>%
+    mutate(bayesian_p = 1 - Post.Prob) %>%
+    pull(bayesian_p) %>%
+    as.numeric()
+  
+  # convert to odds ratios
+  n_odds_ratios_2 <- posterior_summary(mod_2) %>%
+    exp() %>%  # convert log odds to odds ratios
+    as.data.frame() %>%
+    rownames_to_column(var = "effect") %>%
+    filter(effect == "b_comp_use_2.L")  # extract effect for linear trend
+  
+  or_2 <- n_odds_ratios_2 %>%
+    pull(Estimate) %>%
+    as.numeric()
+  
+  n_ci_2_lower <- n_odds_ratios_2 %>%
+    pull(Q2.5) %>%
+    as.numeric()
+  
+  n_ci_2_upper <- n_odds_ratios_2 %>%
+    pull(Q97.5) %>%
+    as.numeric()
+  
+  ci_2 <- c(n_ci_2_lower, n_ci_2_upper)
+  
+  
+  return(list(mod   = list(mod_1 = mod_1, 
+                           mod_2 = mod_2), 
+              or_1  = or_1,
+              ci_1  = ci_1,
+              p_1   = p_1,
+              or_2  = or_2,
+              ci_2  = ci_2,
+              p_2   = p_2,
+              AIC = list(AIC_1 = n_waic_1,
+                         AIC_2 = n_waic_2),
+              DIC = list(DIC_1 = NULL,
+                         DIC_2 = NULL))) 
+  
+}
+
+# apply function to data
+results <- specify_model(data)
+
+```
+
+# View results
+
+```{r}
+
+# table
+data.frame(iv = c("computer weekdays", "computer weekends"),
+           OR = c(results$or_1, results$or_2),
+           CI_lower = c(results$ci_1[1], results$ci_2[1]),
+           CI_upper = c(results$ci_1[2], results$ci_2[2]),
+           bayesian_p = c(results$p_1, results$p_2)) %>%
+  timesavers::round_df(2) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+  
+```
+
+## Computer use weekdays
+
+```{r}
+
+plot_model(results$mod$model_1,
+           prob.inner = 0.5,
+           prob.outer = 0.95)
+
+marginal_effects(results$mod$model_1,
+                 "comp_use_1",
+                 categorical = TRUE)
+
+```
+
+## Computer use weekends
+
+```{r}
+
+plot_model(results$mod$model_2,
+           prob.inner = 0.5,
+           prob.outer = 0.95)
+
+marginal_effects(results$mod$model_2,
+                 "comp_use_2",
+                 categorical = TRUE)
+
+```
+
+
