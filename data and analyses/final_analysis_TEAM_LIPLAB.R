@@ -170,10 +170,10 @@ specify_model <- function(data){
               or_2  = or_2,
               ci_2  = ci_2,
               p_2   = p_2,
-              AIC = list(AIC_1 = n_waic_1,
-                         AIC_2 = n_waic_2),
-              DIC = list(DIC_1 = NULL,
-                         DIC_2 = NULL))) 
+              AIC   = list(AIC_1 = n_waic_1,
+                           AIC_2 = n_waic_2),
+              DIC   = list(DIC_1 = NULL,
+                           DIC_2 = NULL))) 
   
 }
 

@@ -243,6 +243,20 @@ Data missingness is high - so high that multiple imputation is not reccomended i
 
 ## Specify model
 
+## Get prior
+
+We employ the default brms prior, which in this case is relatively weak and non-informative.
+
+```{r}
+
+get_prior(formula = as.ordered(depression) ~ as.ordered(comp_use_1),
+          data = data,
+          family = cumulative("logit"))
+
+```
+
+### Fit model
+
 ```{r}
 
 specify_model <- function(data){
@@ -253,15 +267,16 @@ specify_model <- function(data){
   library(parallel)
   
   # model 1: depression ~ comp_use_1
-  mod_1 <- brm(formula = depression ~ comp_use_1,
-               data = data,
-               family = cumulative("logit"),
-               #prior = c(set_prior("normal(0, 1)", class = "b")),
-               iter = 2000,
-               chains = 4,
-               control = list(adapt_delta = 0.95),
-               cores = detectCores(),
-               file = "TEAM_LIPLAB_mod_1")
+  mod_1 <- brm(formula      = depression ~ comp_use_1,
+               data         = data,
+               family       = cumulative("logit"),
+               #prior        = c(set_prior("normal(0, 1)")),
+               sample_prior = TRUE,
+               iter         = 2000,
+               chains       = 4,
+               control      = list(adapt_delta = 0.95),
+               cores        = detectCores(),
+               file         = "TEAM_LIPLAB_mod_1")
   
   # add waic and loo
   mod_1 <- add_criterion(mod_1, "waic")
@@ -303,15 +318,16 @@ specify_model <- function(data){
   
   
   # model 2: depression ~ comp_use_2
-  mod_2 <- brm(formula = depression ~ comp_use_2,
-               data = data,
-               family = cumulative("logit"),
-               #prior = c(set_prior("normal(0, 1)", class = "b")),
-               iter = 2000,
-               chains = 4,
-               control = list(adapt_delta = 0.95),
-               cores = detectCores(),
-               file = "TEAM_LIPLAB_mod_2")
+  mod_2 <- brm(formula      = depression ~ comp_use_2,
+               data         = data,
+               family       = cumulative("logit"),
+               #prior        = c(set_prior("normal(0, 1)")),
+               sample_prior = TRUE,
+               iter         = 2000,
+               chains       = 4,
+               control      = list(adapt_delta = 0.95),
+               cores        = detectCores(),
+               file         = "TEAM_LIPLAB_mod_2")
   
   # add waic and loo
   mod_2 <- add_criterion(mod_2, "waic")
@@ -360,15 +376,67 @@ specify_model <- function(data){
               or_2  = or_2,
               ci_2  = ci_2,
               p_2   = p_2,
-              AIC = list(AIC_1 = n_waic_1,
-                         AIC_2 = n_waic_2),
-              DIC = list(DIC_1 = NULL,
-                         DIC_2 = NULL))) 
+              AIC   = list(AIC_1 = n_waic_1,
+                           AIC_2 = n_waic_2),
+              DIC   = list(DIC_1 = NULL,
+                           DIC_2 = NULL))) 
   
 }
 
 # apply function to data
 results <- specify_model(data)
+
+```
+
+# Inspect model convergence
+
+## Model 1
+
+```{r fig.height=7, fig.width=5}
+
+plot(results$mod$mod_1, ask = FALSE)
+
+```
+
+```{r}
+
+pp_check(results$mod$mod_1, nsamples = 100)
+
+```
+
+```{r}
+
+summary(results$mod$mod_1)$fixed %>%
+  as.data.frame() %>%
+  round_df(2) %>%
+  select(Eff.Sample, Rhat) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
+
+```
+
+## Model 2
+
+```{r fig.height=7, fig.width=5}
+
+plot(results$mod$mod_2, ask = FALSE)
+
+```
+
+```{r}
+
+pp_check(results$mod$mod_2, nsamples = 100)
+
+```
+
+```{r}
+
+summary(results$mod$mod_2)$fixed %>%
+  as.data.frame() %>%
+  round_df(2) %>%
+  select(Eff.Sample, Rhat) %>%
+  kable() %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
 
 ```
 
@@ -392,11 +460,11 @@ data.frame(iv = c("computer weekdays", "computer weekends"),
 
 ```{r}
 
-plot_model(results$mod$model_1,
+plot_model(results$mod$mod_1,
            prob.inner = 0.5,
            prob.outer = 0.95)
 
-marginal_effects(results$mod$model_1,
+marginal_effects(results$mod$mod_1,
                  "comp_use_1",
                  categorical = TRUE)
 
@@ -406,11 +474,11 @@ marginal_effects(results$mod$model_1,
 
 ```{r}
 
-plot_model(results$mod$model_2,
+plot_model(results$mod$mod_2,
            prob.inner = 0.5,
            prob.outer = 0.95)
 
-marginal_effects(results$mod$model_2,
+marginal_effects(results$mod$mod_2,
                  "comp_use_2",
                  categorical = TRUE)
 
