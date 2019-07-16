@@ -6,14 +6,11 @@ load_data <- function(path){
   # IMPORTS 
   library(tidyverse)
   
-  # SELECT DATA
+  # SELECT DATA VARIABLES OF INTEREST
   data <- read.csv(path) %>%
     dplyr::select(comp_week,
                   comp_wend,
-                  dep_score,
-                  dep_thoughts,
-                  has_dep_diag,
-                  dep_band_15)
+                  dep_score)
   
   return(data)
 }
@@ -26,19 +23,21 @@ computer_use_001 <- function(data){
   library(forcats)
   
   # SET ORDERED LEVELS
+  # comp_use_1 and comp_use_2 are both defined using their original four oridinal levels of these variables found in the dataset. 
+  # code below simply ensures that the data type is set to ordinal (ie an ordered factor) and the levels are correctly ordered 
   data <- data %>%
-    dplyr::mutate(comp_use_1 = forcats::fct_relevel(comp_week,
+    dplyr::mutate(comp_use_1 = forcats::fct_relevel(comp_week,  # set ordering among levels
                                                     "Not at all",
                                                     "Less than 1 hour",
                                                     "1-2 hours",
                                                     "3 or more hours"),
-                  comp_use_1 = as.ordered(comp_use_1),
-                  comp_use_2 = forcats::fct_relevel(comp_wend,
+                  comp_use_1 = as.ordered(comp_use_1),  # change data type to ordered factor
+                  comp_use_2 = forcats::fct_relevel(comp_wend,  # set ordering among levels
                                                     "Not at all",
                                                     "Less than 1 hour",
                                                     "1-2 hours",
                                                     "3 or more hours"),
-                  comp_use_2 = as.ordered(comp_use_2))
+                  comp_use_2 = as.ordered(comp_use_2))  # change data type to ordered factor
   
   return(data)
 }
@@ -50,14 +49,16 @@ depression_001 <- function(data){
   library(tidyverse)
   
   # SET ORDERED LEVELS
+  # depression is defined as the dep_score variable, using the oridinal levels of this variable found in the dataset. 
+  # code below simply ensures that the data type is set to ordinal (ie an ordered factor)
   data <- data %>%
-    dplyr::mutate(depression = as.ordered(dep_score))
+    dplyr::mutate(depression = as.ordered(dep_score))  # change data type to ordered factor
   
   return(data)
 }
 
 
-specify_model <- function(data){
+specify_model <- function(data, N_ITERATIONS, N_CHAINS, CONTROL_LIST){
   
   # IMPORTS
   library(tidyverse)
@@ -65,18 +66,16 @@ specify_model <- function(data){
   library(parallel)
   
   # MODEL 1: depression ~ comp_use_1
-  mod_1 <- brm(formula      = depression ~ comp_use_1,
-               data         = data,
-               family       = cumulative("logit"),
-               #prior        = c(set_prior("normal(0, 1)")),
-               sample_prior = TRUE,
-               iter         = 2000,
-               chains       = 4,
-               control      = list(adapt_delta = 0.95),
-               cores        = detectCores(),
-               file         = "TEAM_LIPLAB_mod_1")
+  mod_1 <- brms::brm(formula      = depression ~ comp_use_1,
+                     data         = data,
+                     family       = cumulative("logit"),
+                     sample_prior = TRUE,
+                     iter         = N_ITERATIONS,
+                     chains       = N_CHAINS,
+                     control      = CONTROL_LIST,
+                     cores        = detectCores())
   
-  # ADD WAIC 
+  # ADD WAIC TO MODEL
   mod_1 <- add_criterion(mod_1, "waic")
   
   # EXTRACT WAIC VALUE
@@ -110,18 +109,16 @@ specify_model <- function(data){
   
   
   # MODEL 2: depression ~ comp_use_2
-  mod_2 <- brm(formula      = depression ~ comp_use_2,
-               data         = data,
-               family       = cumulative("logit"),
-               #prior        = c(set_prior("normal(0, 1)")),
-               sample_prior = TRUE,
-               iter         = 2000,
-               chains       = 4,
-               control      = list(adapt_delta = 0.95),
-               cores        = detectCores(),
-               file         = "TEAM_LIPLAB_mod_2")
+  mod_2 <- brms::brm(formula      = depression ~ comp_use_2,
+                     data         = data,
+                     family       = cumulative("logit"),
+                     sample_prior = TRUE,
+                     iter         = N_ITERATIONS,
+                     chains       = N_CHAINS,
+                     control      = CONTROL_LIST,
+                     cores        = detectCores())
   
-  # ADD WAIC 
+  # ADD WAIC TO MODEL
   mod_2 <- add_criterion(mod_2, "waic")
   
   # EXTRACT WAIC VALUE
@@ -154,7 +151,8 @@ specify_model <- function(data){
   ci_2 <- c(n_ci_2_lower, n_ci_2_upper)
   
   # RETURN RESULTS LIST
-  return(list(mod   = list(mod_1 = mod_1, 
+  return(list(data = data, 
+              mod   = list(mod_1 = mod_1, 
                            mod_2 = mod_2), 
               or_1  = or_1,
               ci_1  = ci_1,
@@ -168,14 +166,18 @@ specify_model <- function(data){
   
 }
 
-data    <- load_data("maps-synthetic-data-v1.1.csv")
+path    <- "maps-synthetic-data-v1.1.csv"
+data    <- load_data(path)
 data    <- computer_use_001(data)
 data    <- depression_001(data)
-results <- specify_model(data)
+results <- specify_model(data, 
+                         CONTROL_LIST = list(adapt_delta = 0.95),
+                         N_ITERATIONS = 2000,
+                         N_CHAINS = 4)
 
-# # save and print results
+# # save results
 # save(results, file = "results.RData")
-# 
+
 # # print results
 # results$or_1
 # results$ci_1
