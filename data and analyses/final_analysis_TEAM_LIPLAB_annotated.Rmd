@@ -283,7 +283,10 @@ get_prior(formula = as.ordered(depression) ~ as.ordered(comp_use_1),
                
 ```{r}
 
-specify_model <- function(data, N_ITERATIONS, N_CHAINS, CONTROL_LIST){
+specify_model <- function(data, 
+                         CONTROL_LIST = list(adapt_delta = 0.95),
+                         N_ITERATIONS = 2000,
+                         N_CHAINS = 4){
   
   # IMPORTS
   library(tidyverse)
@@ -394,10 +397,7 @@ specify_model <- function(data, N_ITERATIONS, N_CHAINS, CONTROL_LIST){
 }
 
 # APPLY FUNCTION TO DATA
-results <- specify_model(data, 
-                         CONTROL_LIST = list(adapt_delta = 0.95),
-                         N_ITERATIONS = 2000,
-                         N_CHAINS = 4)
+results <- specify_model(data)
 
 ```
 

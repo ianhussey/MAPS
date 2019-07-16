@@ -58,8 +58,10 @@ depression_001 <- function(data){
 }
 
 
-specify_model <- function(data, N_ITERATIONS, N_CHAINS, CONTROL_LIST){
-  
+specify_model <- function(data){
+  CONTROL_LIST = list(adapt_delta = 0.95)
+  N_ITERATIONS = 2000
+  N_CHAINS = 4
   # IMPORTS
   library(tidyverse)
   library(brms)  # nb requires brms 2.8+
@@ -170,10 +172,7 @@ path    <- "maps-synthetic-data-v1.1.csv"
 data    <- load_data(path)
 data    <- computer_use_001(data)
 data    <- depression_001(data)
-results <- specify_model(data, 
-                         CONTROL_LIST = list(adapt_delta = 0.95),
-                         N_ITERATIONS = 2000,
-                         N_CHAINS = 4)
+results <- specify_model(data)
 
 # # save results
 # save(results, file = "results.RData")
