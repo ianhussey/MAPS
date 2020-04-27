@@ -21,12 +21,12 @@ The research question was defined by the MAPS team as "Is computer use during we
 I interpreted each element of this research question as follows:
 
 1. "computer use during weekdays and weekends" was interpreted as "(computer use during weekdays) and (computer use during weekends)". There is much scope for alternative interpretations, such as by pooling the two variables, or pooling them and weighting them to attempt to quantify the total hours per week, etc. However, given that the response format was ordinal (ie max was "3+ hours"), the latter would introduce great uncertainty. As such, I work with the native data format. This meant answering the two questions (depression ~ computer use weekdays and depression ~ computer use weekends) separately. I should note that, as far as I understand, Khouja et al. (2019) reduced this to three categories by merging the none and less than one hour categories. However, the article was not explicit about this as far as I can see.
-  - This straggy therefore diverges from our understanding of what Khouja et al. (2019) did, who seem to have recoded the four ordinal levels to three (i.e. they merged the zero and the less than 1 hour options. 
-  - Equally, I was careful not to over interpret the question as asking about the relative prediction of these two types of computer usage: I computed two separate models (depression ~ computer use weekdays and depression ~ computer use weekends) rather than a single model containing both computer usage variables (e.g., depression ~ computer use weekdays + computer use weekends), as the latter would instead ask whether the unique contribution of one type of computer usage predicted depression after controlling for the other type. I note that this was the strategy employed by Khouja et al. (2019). 
+- This straggy therefore diverges from our understanding of what Khouja et al. (2019) did, who seem to have recoded the four ordinal levels to three (i.e. they merged the zero and the less than 1 hour options. 
+- Equally, I was careful not to over interpret the question as asking about the relative prediction of these two types of computer usage: I computed two separate models (depression ~ computer use weekdays and depression ~ computer use weekends) rather than a single model containing both computer usage variables (e.g., depression ~ computer use weekdays + computer use weekends), as the latter would instead ask whether the unique contribution of one type of computer usage predicted depression after controlling for the other type. I note that this was the strategy employed by Khouja et al. (2019). 
 2. "16 years old" was interpreted as "the nearest timepoint to 16 years old", which was 15.5. 
 3. "associated with" was interpreted as meaning an association, not necessarially a causation. That is, I did not over interpret the research question to examine whether computer use caused depression (e.g., by predicting change in depression between the two timepoints due to computer use at the first timepoint). I think this point is particularly important to acknowledge. Given the prospective design, I think it is likely the reader may misinterpret any such association as implying causality, even if implicitly. Of course, finding any association could equally be explained by depression levels being relatively static between the two timepoints and a) depression causing computer usage, or b) a third variable causing both. Given that this topic is likely to be read (and potentially misinterpreted) by many concerned parents, this possibility must be highlighted, in our opinion. Indeed, the more meaningful question might well be whether there is likely to be a causal link between computer usage and symptoms of psychopathology, however, it is not the question asked by the MAPS team. As I noted above, in addition to flexibility in the analytic approach used to answer a given question, flexibility in the (re)interpretation of what the question is (or worse, “really” is or should be), likely represent an even greater number of experimenter degrees of freedom. As such, I attempt to answer the question as literally as possible.
 4. "depression" was interpreted as depressive symptoms. Multiple depression related variables were present in the data. I elect to employ dep_score on the basis that it is defined as symptoms of depression rather than merely depressive thoughts. In addition, the depressive thoughts variable was conditionally branched from depression symptoms - it was not delivered if a depression symptoms response of 0 was provided. Although depressive thoughts could notionally be expected to have better lowerbound sensitivity than overt symptoms, this use of conditional branching made symptoms more appropriate in my opinion. A diagnosis of depression variable (has_dep_diag) was also present in the data. However, this score represents a compound scoring of symptoms and thoughts. As such, the more granular symptoms variable was considered most suitable for analysis. The DAWBA depression bands were also considered as a potential DV. However, given a) the very poor correlations between depressive symptoms and the algorithmic diagnosis of depression provided by the DAWBA bands, b) the historic reliance on self reports of depressive symptoms rather than algorithmic integration of responses by the individual as well as their caregivers, and c) my lack of exertise with such algorithmic probabilty bands and their acceptiability within the depression literature, I elected to rely solely on the depressive symtoms variable as my outcome measure (e.g., rather than other or multiple variables in a multivariate model). 
-   
+
 5. "at 18 years old" was interpreted as "the nearest timepoint to 18 years old", which was 17.5. 
 
 On the basis of our above interpretations of the question, I therefore elected to analyze the data using (Bayesian) Ordinal Regression models, on the basis that both depression and computer use were ordinal. This was done using the brms package (see Burkner & Vuorre, 2018, Ordinal Regression Models in Psychology: A Tutorial, doi: 10.1177/2515245918823199). 
@@ -172,9 +172,9 @@ temp <- data %>%
 
 # ordinal correlation between dep_score and dep_band_15
 correlation <- cor(as.numeric(temp$dep_score), 
-    as.numeric(temp$dep_band_15_new), 
-    use = "pairwise.complete.obs", 
-    method = "spearman")
+                   as.numeric(temp$dep_band_15_new), 
+                   use = "pairwise.complete.obs", 
+                   method = "spearman")
 
 # jittered scatter plot
 ggplot(temp, aes(dep_score, dep_band_15_new)) +
@@ -280,13 +280,13 @@ get_prior(formula = as.ordered(depression) ~ as.ordered(comp_use_1),
 ```
 
 ### Fit model
-               
+
 ```{r}
 
 specify_model <- function(data, 
-                         CONTROL_LIST = list(adapt_delta = 0.95),
-                         N_ITERATIONS = 2000,
-                         N_CHAINS = 4){
+                          CONTROL_LIST = list(adapt_delta = 0.95),
+                          N_ITERATIONS = 2000,
+                          N_CHAINS = 4){
   
   # IMPORTS
   library(tidyverse)
@@ -466,7 +466,7 @@ data.frame(iv = c("computer weekdays", "computer weekends"),
   timesavers::round_df(2) %>%
   kable() %>%
   kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE)
-  
+
 ```
 
 ## Computer use weekdays
